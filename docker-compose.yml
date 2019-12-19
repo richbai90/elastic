@@ -1,0 +1,66 @@
+version: "3.2"
+
+services:
+  elasticsearch:
+    image: "docker.elastic.co/elasticsearch/elasticsearch-oss:6.7.1"
+    volumes:
+      - "esdata:/usr/share/elasticsearch/data"
+    environment:
+      - "discovery.type=single-node"
+  kibana:
+    build: "./kibana"
+    depends_on:
+      - elasticsearch
+    environment:
+      SERVER_BASEPATH: /insights
+    ports:
+      - "5600:5601"
+  logstash:
+    image: docker.elastic.co/logstash/logstash-oss:6.7.1
+    depends_on:
+      - elasticsearch
+    environment:
+      CONFIG_RELOAD_AUTOMATIC: null
+    ports:
+      - "9600:9600"
+      - "5044:5044"
+      - "8080:8080"
+    volumes:
+      - type: bind
+        source: /Users/richbaird/code/elastic/pipeline/
+        target: /usr/share/logstash/pipeline/
+      - type: bind
+        source: /Users/richbaird/code/elastic/data/
+        target: /usr/share/logstash/data/
+  elastalert:
+    image: "bitsensor/elastalert"
+    volumes:
+      - "./elastalert/config/elastalert/config.yaml:/opt/elastalert/config.yaml"
+      - "./elastalert/config/elastalert/config-test.yaml:/opt/elastalert/config-test.yaml"
+      - "./elastalert/config/elastalert-server/config.json:/opt/elastalert-server/config/config.json"
+      - "./elastalert/rules:/opt/elastalert/rules"
+      - "./elastalert/rule-templates:/opt/elastalert/rule_templates"
+    depends_on:
+      - elasticsearch
+  proxy:
+    image: "openresty/openresty:stretch-fat"
+    volumes:
+      - "./nginx/conf:/etc/nginx/conf.d/"
+    ports:
+      - "80:80"
+    networks:
+      default:
+        aliases:
+          - swapi
+          - elk.proxy
+    depends_on: 
+      - elasticsearch
+  auth:
+    build: "./sw_auth_middleware"
+  certbot:
+    image: certbot/certbot
+volumes:
+  esdata:
+    driver: local
+  elastalert:
+    driver: local
